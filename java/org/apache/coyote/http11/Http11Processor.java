@@ -197,18 +197,6 @@ public class Http11Processor extends AbstractProcessor {
 
 
     /**
-     * Determine if we must drop the connection because of the HTTP status code. Use the same list of codes as
-     * Apache/httpd.
-     */
-    private static boolean statusDropsConnection(int status) {
-        return status == 400 /* SC_BAD_REQUEST */ || status == 408 /* SC_REQUEST_TIMEOUT */ ||
-                status == 411 /* SC_LENGTH_REQUIRED */ || status == 413 /* SC_REQUEST_ENTITY_TOO_LARGE */ ||
-                status == 414 /* SC_REQUEST_URI_TOO_LONG */ || status == 500 /* SC_INTERNAL_SERVER_ERROR */ ||
-                status == 503 /* SC_SERVICE_UNAVAILABLE */ || status == 501 /* SC_NOT_IMPLEMENTED */;
-    }
-
-
-    /**
      * Add an input filter to the current request. If the encoding is not supported, a 501 response will be returned to
      * the client.
      */
@@ -395,15 +383,6 @@ public class Http11Processor extends AbstractProcessor {
                 try {
                     rp.setStage(org.apache.coyote.Constants.STAGE_SERVICE);
                     getAdapter().service(request, response);
-                    // Handle when the response was committed before a serious
-                    // error occurred. Throwing a ServletException should both
-                    // set the status to 500 and set the errorException.
-                    // If we fail here, then the response is likely already
-                    // committed, so we can't try and set headers.
-                    if (keepAlive && !getErrorState().isError() && !isAsync() &&
-                            statusDropsConnection(response.getStatus())) {
-                        setErrorState(ErrorState.CLOSE_CLEAN, null);
-                    }
                 } catch (InterruptedIOException e) {
                     setErrorState(ErrorState.CLOSE_CONNECTION_NOW, e);
                 } catch (HeadersTooLargeException e) {
@@ -1000,11 +979,6 @@ public class Http11Processor extends AbstractProcessor {
         // than the configuration allows
         checkMaxSwallowSize();
 
-        // If we know that the request is bad this early, add the
-        // Connection: close header.
-        if (keepAlive && statusDropsConnection(statusCode)) {
-            keepAlive = false;
-        }
         if (!keepAlive) {
             // Avoid adding the close header twice
             if (!connectionClosePresent) {
